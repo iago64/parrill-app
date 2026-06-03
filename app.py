@@ -189,7 +189,7 @@ def render_order_header(order_data: dict, members: list) -> None:
     st.subheader(order_data["title"])
     status_label = ORDER_STATUS_LABELS.get(order_data["status"], order_data["status"])
     st.caption(
-        f"Código: {order_data['order_code']} | Estado: {status_label} | Creó: {order_data['created_by_name']}"
+        f"Código: {order_data['order_code']} | Estado: {status_label} | Creó: {order_data['created_by_name']} | Clave: {order_data['access_key']}"
     )
 
     metrics = st.columns(3)
@@ -363,7 +363,7 @@ def main() -> None:
 
     st.title(APP_TITLE)
     st.write(
-        "Gestioná pedidos compartidos desde la carta CSV, con usuarios persistidos en SQLite y acceso a cada pedido mediante una palabra clave."
+        "Gestioná pedidos compartidos de SisOp en la app de la parri de Campus"
     )
 
     render_session_panel(current_user["name"])
