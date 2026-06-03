@@ -25,9 +25,45 @@ Minutas,Papas fritas / Puré de papa,6000
 Minutas,Porción de tortilla,6000
 Minutas,Tortilla chica,17000
 Minutas,Tortilla grande (5 Personas),24000
+Sandwiches,Choripan,6000
+Sandwiches,Bondiola,11000
+Sandwiches,Bondiola con 2 ingredientes,11500
+Sandwiches,Bondiola completa,12000
+Sandwiches,Vacio,12500
+Sandwiches,Vacio con 2 ingredientes,13500
+Sandwiches,Vacio completo,14500
+Sandwiches,Lomo,14000
+Sandwiches,Lomo,15000
+Sandwiches,Lomo,16000
+Sandwiches,Milanesa,12000
+Sandwiches,Milanesa con 2 ingredientes,14000
+Sandwiches,Milanesa,15000
+Sandwiches,Hamburguesa,5500
+Sandwiches,Hamburguesa con 2 ingredientes,5500
+Sandwiches,Hamburguesa completa,6000
 Achuras,Chinchulin,6500
 Achuras,Riñon,7000
+Ensaladas,Ensalada Chica,5000
+Ensaladas,Ensalada Mediana,6000
+Ensaladas,Ensalada Grande,7000
 Empanadas,Jamon y Queso,2300
+Pastas,Tallarines,7000
+Pastas,Tallarines con estofado,8500
+Pastas,Ravioles,9500
+Pastas,Ravioles con estofado,11500
+Pastas,Sorrentinos,12000
+Pastas,Sorrentinos con estofado,14000
+Pastas,ñoquis,9000
+Pastas,ñoquis con estofado,10000
+Vinos,Vaso de vino,4000
+Vinos,Trumpeter Malbec,15000
+Vinos,Cordero con piel de lobo Malbec,9500
+Postres,Popsy,0
+Postres,Nesquick,0
+Postres,Torpedo,0
+Postres,Luxor,0
+Postres,Tacita Sin Parar / Oreo,0
+Postres,Queso y Dulce,7500
 Empanadas,Pollo,2300
 Empanadas,Carne,2300
 Empanadas,Carne cortada a cuchillo / fritas,2500
@@ -36,3 +72,13 @@ Bebidas,Levité / Aquarius,2200
 Bebidas,Powerade,2800
 Bebidas,Agua,2000
 Bebidas,Soda,2000
+Cervezas / Fernet,Brahma 1ltrs,6000
+Cervezas / Fernet,Stella Artois 1ltrs,8000
+Cervezas / Fernet,Corona 710cc,6500
+Cervezas / Fernet,LATA Heineken 473cc,4000
+Cervezas / Fernet,Medida fernet,4500
+Cervezas / Fernet,Fernet con coca,5500
+Cafetería,Café,0
+Cafetería,Té,1000
+Cafetería,Medialuna,800
+Cafetería,MEdialuna con jamón y queso,900
