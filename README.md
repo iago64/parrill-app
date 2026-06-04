@@ -26,6 +26,19 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
+## Panel administrativo
+
+Para habilitar una vista segura de todos los pedidos y poder eliminarlos:
+
+- Definí la variable de entorno `PARRILL_APP_ADMIN_PASSWORD` antes de levantar la app.
+- O configurá `admin_password = "tu-clave"` en `.streamlit/secrets.toml`.
+
+Cuando esa contraseña está presente, aparece un panel administrativo protegido que:
+
+- lista todos los pedidos armados;
+- exige escribir el código del pedido antes de borrarlo;
+- elimina también participantes e ítems asociados.
+
 ## Estructura de datos
 
 La app usa SQLite local mediante el módulo estándar `sqlite3`. Si más adelante necesitás moverla a otra base, la capa de acceso está concentrada en `db.py`.

@@ -12,6 +12,7 @@ DB_PATH = BASE_DIR / "parrilla.db"
 MENU_CSV_PATH = BASE_DIR / "carta.csv"
 ALLOWED_ORDER_STATUSES = {"open", "confirmed", "closed"}
 INSERT_ORDER_MEMBER_SQL = "INSERT OR IGNORE INTO order_members (order_id, user_id) VALUES (?, ?)"
+ORDER_NOT_FOUND_MESSAGE = "El pedido ya no existe."
 
 
 def get_connection() -> sqlite3.Connection:
@@ -312,7 +313,7 @@ def ensure_user_owns_order(connection: sqlite3.Connection, order_id: int, user_i
         (order_id,),
     ).fetchone()
     if order is None:
-        raise ValueError("El pedido ya no existe.")
+        raise ValueError(ORDER_NOT_FOUND_MESSAGE)
     if int(order["created_by"]) != int(user_id):
         raise PermissionError("Solo quien creó el pedido puede hacer esta acción.")
     return order
@@ -324,7 +325,7 @@ def ensure_order_allows_changes(connection: sqlite3.Connection, order_id: int) -
         (order_id,),
     ).fetchone()
     if order is None:
-        raise ValueError("El pedido ya no existe.")
+        raise ValueError(ORDER_NOT_FOUND_MESSAGE)
     if order["status"] == "closed":
         raise ValueError("El pedido está cerrado y ya no admite cambios.")
 
@@ -345,6 +346,18 @@ def update_order_status(order_id: int, status: str, requested_by: int) -> None:
 def delete_order(order_id: int, requested_by: int) -> None:
     with get_connection() as connection:
         ensure_user_owns_order(connection, order_id, requested_by)
+        connection.execute("DELETE FROM orders WHERE id = ?", (order_id,))
+
+
+def delete_order_as_admin(order_id: int) -> None:
+    with get_connection() as connection:
+        order = connection.execute(
+            "SELECT id FROM orders WHERE id = ?",
+            (order_id,),
+        ).fetchone()
+        if order is None:
+            raise ValueError(ORDER_NOT_FOUND_MESSAGE)
+
         connection.execute("DELETE FROM orders WHERE id = ?", (order_id,))
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 import sqlite3
 
 import streamlit as st
@@ -14,12 +15,14 @@ from db import (
     as_dict,
     create_order,
     delete_order,
+    delete_order_as_admin,
     format_currency,
     get_menu_by_category,
     get_order,
     get_order_by_access_key,
     get_order_items,
     get_order_members,
+    get_orders,
     get_order_totals_by_user,
     get_or_create_user,
     get_user,
@@ -34,6 +37,7 @@ st.set_page_config(page_title="Parrill App", page_icon="🍽️", layout="wide")
 
 
 APP_TITLE = "Parrill App"
+ADMIN_PASSWORD_ENV_VAR = "PARRILL_APP_ADMIN_PASSWORD"
 
 
 ORDER_STATUS_LABELS = {
@@ -46,6 +50,7 @@ ORDER_STATUS_LABELS = {
 def ensure_session_state() -> None:
     st.session_state.setdefault("selected_user_id", None)
     st.session_state.setdefault("selected_order_id", None)
+    st.session_state.setdefault("admin_authenticated", False)
 
 
 def clear_selected_order() -> None:
@@ -57,6 +62,134 @@ def clear_selected_order() -> None:
 def logout_user() -> None:
     clear_selected_order()
     st.session_state["selected_user_id"] = None
+    st.session_state["admin_authenticated"] = False
+
+
+def get_admin_password() -> str:
+    secret_password = str(st.secrets.get("admin_password", "")).strip()
+    if secret_password:
+        return secret_password
+
+    return os.getenv(ADMIN_PASSWORD_ENV_VAR, "").strip()
+
+
+def render_admin_access_panel() -> bool:
+    admin_password = get_admin_password()
+
+    with st.sidebar.expander("Administración", expanded=False):
+        if not admin_password:
+            st.session_state["admin_authenticated"] = False
+            st.caption(
+                "Configurá `admin_password` en Streamlit secrets o la variable de entorno "
+                f"`{ADMIN_PASSWORD_ENV_VAR}` para habilitar esta vista."
+            )
+            return False
+
+        if st.session_state.get("admin_authenticated"):
+            st.success("Panel administrativo habilitado.")
+            if st.button("Cerrar panel admin", use_container_width=True):
+                st.session_state["admin_authenticated"] = False
+                st.rerun()
+            return True
+
+        with st.form("admin_access_form", clear_on_submit=True):
+            entered_password = st.text_input("Contraseña de administración", type="password")
+            submitted = st.form_submit_button("Abrir panel", use_container_width=True)
+
+        if submitted:
+            if entered_password == admin_password:
+                st.session_state["admin_authenticated"] = True
+                st.rerun()
+
+            st.error("La contraseña administrativa es incorrecta.")
+
+    return st.session_state.get("admin_authenticated", False)
+
+
+def render_admin_orders_panel() -> None:
+    st.subheader("Pedidos armados")
+    st.caption(
+        "Vista administrativa protegida. El borrado elimina el pedido, sus participantes y sus ítems."
+    )
+
+    orders = [as_dict(order) for order in get_orders()]
+    if not orders:
+        st.info("No hay pedidos cargados.")
+        return
+
+    open_orders = sum(1 for order in orders if order["status"] == "open")
+    closed_orders = sum(1 for order in orders if order["status"] == "closed")
+    metrics = st.columns(3)
+    metrics[0].metric("Pedidos", len(orders))
+    metrics[1].metric("Abiertos", open_orders)
+    metrics[2].metric("Cerrados", closed_orders)
+
+    table_rows = []
+    order_options: dict[str, dict] = {}
+    for order in orders:
+        status_label = ORDER_STATUS_LABELS.get(order["status"], order["status"])
+        label = (
+            f"{order['title']} [{order['order_code']}] | {status_label} | "
+            f"{order['created_by_name']}"
+        )
+        order_options[label] = order
+        table_rows.append(
+            {
+                "Codigo": order["order_code"],
+                "Pedido": order["title"],
+                "Estado": status_label,
+                "Creador": order["created_by_name"],
+                "Participantes": order["member_count"],
+                "Total": format_currency(order["total_amount"]),
+                "Actualizado": order["updated_at"],
+            }
+        )
+
+    st.dataframe(table_rows, hide_index=True, use_container_width=True)
+
+    selected_label = st.selectbox(
+        "Pedido a eliminar",
+        options=list(order_options.keys()),
+        index=None,
+        placeholder="Seleccioná un pedido para borrarlo",
+    )
+    if selected_label is None:
+        return
+
+    selected_order = order_options[selected_label]
+    st.warning(
+        f"Vas a eliminar {selected_order['title']} [{selected_order['order_code']}]. Esta acción no se puede deshacer."
+    )
+
+    with st.form(f"admin_delete_order_{selected_order['id']}"):
+        confirmation_code = st.text_input(
+            "Escribí el código del pedido para confirmar",
+            placeholder=str(selected_order["order_code"]),
+        )
+        submitted = st.form_submit_button(
+            "Eliminar pedido definitivamente",
+            type="primary",
+            use_container_width=True,
+        )
+
+    if not submitted:
+        return
+
+    if confirmation_code.strip().upper() != str(selected_order["order_code"]):
+        st.error("El código ingresado no coincide. No se eliminó el pedido.")
+        return
+
+    try:
+        delete_order_as_admin(int(selected_order["id"]))
+    except ValueError as error:
+        st.error(str(error))
+        return
+
+    if st.session_state.get("selected_order_id") == int(selected_order["id"]):
+        clear_selected_order()
+
+    st.success("Pedido eliminado.")
+    st.rerun()
 
 
 def render_login_screen() -> None:
@@ -185,12 +318,16 @@ def render_order_panel(current_user_id: int | None) -> int | None:
     return st.session_state.get("selected_order_id")
 
 
-def render_order_header(order_data: dict, members: list) -> None:
+def render_order_header(order_data: dict, members: list, current_user_id: int) -> None:
     st.subheader(order_data["title"])
     status_label = ORDER_STATUS_LABELS.get(order_data["status"], order_data["status"])
-    st.caption(
-        f"Código: {order_data['order_code']} | Estado: {status_label} | Creó: {order_data['created_by_name']} | Clave: {order_data['access_key']}"
+    details = (
+        f"Código: {order_data['order_code']} | Estado: {status_label} | "
+        f"Creó: {order_data['created_by_name']}"
     )
+    if int(order_data["created_by"]) == int(current_user_id):
+        details = f"{details} | Clave: {order_data['access_key']}"
+    st.caption(details)
 
     metrics = st.columns(3)
     metrics[0].metric("Total", format_currency(order_data["total_amount"]))
@@ -368,9 +505,15 @@ def main() -> None:
 
     render_session_panel(current_user["name"])
     current_order_id = render_order_panel(current_user_id)
+    admin_authenticated = render_admin_access_panel()
+
+    if admin_authenticated:
+        render_admin_orders_panel()
+        st.divider()
 
     if current_order_id is None:
-        st.info("Creá un pedido nuevo o ingresá la palabra clave de uno existente desde la barra lateral.")
+        if not admin_authenticated:
+            st.info("Creá un pedido nuevo o ingresá la palabra clave de uno existente desde la barra lateral.")
         return
 
     order_data = as_dict(get_order(current_order_id))
@@ -380,7 +523,7 @@ def main() -> None:
         return
 
     members = get_order_members(current_order_id)
-    render_order_header(order_data, members)
+    render_order_header(order_data, members, current_user_id)
     render_order_owner_actions(order_data, current_user_id)
 
     left_column, right_column = st.columns([1.2, 1])
