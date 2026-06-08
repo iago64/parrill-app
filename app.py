@@ -5,6 +5,7 @@ import os
 import sqlite3
 
 import streamlit as st
+from streamlit.errors import StreamlitSecretNotFoundError
 
 import db as db_module
 
@@ -16,19 +17,19 @@ from db import (
     create_order,
     delete_order,
     delete_order_as_admin,
-    format_currency,
     get_menu_by_category,
     get_order,
     get_order_by_access_key,
     get_order_items,
     get_order_members,
     get_orders,
-    get_order_totals_by_user,
+    get_order_totals_by_product,
     get_or_create_user,
     get_user,
     init_db,
     join_order,
     remove_order_item,
+    remove_order_item_as_admin,
     update_order_status,
 )
 
@@ -66,7 +67,10 @@ def logout_user() -> None:
 
 
 def get_admin_password() -> str:
-    secret_password = str(st.secrets.get("admin_password", "")).strip()
+    try:
+        secret_password = str(st.secrets.get("admin_password", "")).strip()
+    except StreamlitSecretNotFoundError:
+        secret_password = ""
     if secret_password:
         return secret_password
 
@@ -140,7 +144,7 @@ def render_admin_orders_panel() -> None:
                 "Estado": status_label,
                 "Creador": order["created_by_name"],
                 "Participantes": order["member_count"],
-                "Total": format_currency(order["total_amount"]),
+                "Items": order["total_items"],
                 "Actualizado": order["updated_at"],
             }
         )
@@ -226,7 +230,7 @@ def render_session_panel(user_name: str) -> None:
 
 
 def handle_create_order_form(current_user_id: int) -> None:
-    with st.sidebar.form("create_order_form", clear_on_submit=True):
+    with st.form("create_order_form", clear_on_submit=True):
         st.write("Crear pedido compartido")
         title = st.text_input("Nombre del pedido", placeholder="Ej: Mesa viernes")
         access_key = st.text_input(
@@ -243,29 +247,29 @@ def handle_create_order_form(current_user_id: int) -> None:
         return
 
     if not title.strip():
-        st.sidebar.error("El pedido necesita un nombre.")
+        st.error("El pedido necesita un nombre.")
         return
 
     if not access_key.strip():
-        st.sidebar.error("La palabra clave es obligatoria.")
+        st.error("La palabra clave es obligatoria.")
         return
 
     try:
         order_id = create_order(title=title, created_by=current_user_id, access_key=access_key)
     except ValueError as error:
-        st.sidebar.error(str(error))
+        st.error(str(error))
         return
     except sqlite3.IntegrityError:
-        st.sidebar.error("Esa palabra clave ya está en uso. Elegí otra.")
+        st.error("Esa palabra clave ya está en uso. Elegí otra.")
         return
 
     st.session_state["selected_order_id"] = order_id
-    st.sidebar.success("Pedido creado. Compartí la palabra clave para que otros puedan ingresar.")
+    st.success("Pedido creado. Compartí la palabra clave para que otros puedan ingresar.")
     st.rerun()
 
 
 def handle_access_order_form(current_user_id: int) -> None:
-    with st.sidebar.form("access_order_form", clear_on_submit=True):
+    with st.form("access_order_form", clear_on_submit=True):
         st.write("Entrar a un pedido")
         access_key = st.text_input(
             "Palabra clave del pedido",
@@ -278,17 +282,17 @@ def handle_access_order_form(current_user_id: int) -> None:
         return
 
     if not access_key.strip():
-        st.sidebar.error("Ingresá la palabra clave del pedido.")
+        st.error("Ingresá la palabra clave del pedido.")
         return
 
     order = get_order_by_access_key(access_key)
     if order is None:
-        st.sidebar.error("No existe un pedido con esa palabra clave.")
+        st.error("No existe un pedido con esa palabra clave.")
         return
 
     join_order(order["id"], current_user_id)
     st.session_state["selected_order_id"] = int(order["id"])
-    st.sidebar.success(f"Ingresaste a {order['title']}.")
+    st.success(f"Ingresaste a {order['title']}.")
     st.rerun()
 
 
@@ -297,10 +301,6 @@ def render_order_panel(current_user_id: int | None) -> int | None:
     if current_user_id is None:
         st.sidebar.info("Primero iniciá sesión para crear o acceder a un pedido.")
         return None
-
-    handle_create_order_form(current_user_id)
-    st.sidebar.divider()
-    handle_access_order_form(current_user_id)
 
     selected_order_id = st.session_state.get("selected_order_id")
     if selected_order_id is not None:
@@ -318,6 +318,17 @@ def render_order_panel(current_user_id: int | None) -> int | None:
     return st.session_state.get("selected_order_id")
 
 
+def render_order_entry_screen(current_user_id: int) -> None:
+    st.subheader("Elegí cómo continuar")
+    st.caption("Primero creá un pedido o sumate a uno existente con su palabra clave.")
+
+    create_column, join_column = st.columns(2)
+    with create_column:
+        handle_create_order_form(current_user_id)
+    with join_column:
+        handle_access_order_form(current_user_id)
+
+
 def render_order_header(order_data: dict, members: list, current_user_id: int) -> None:
     st.subheader(order_data["title"])
     status_label = ORDER_STATUS_LABELS.get(order_data["status"], order_data["status"])
@@ -330,7 +341,7 @@ def render_order_header(order_data: dict, members: list, current_user_id: int) -
     st.caption(details)
 
     metrics = st.columns(3)
-    metrics[0].metric("Total", format_currency(order_data["total_amount"]))
+    metrics[0].metric("Items cargados", order_data["total_items"])
     metrics[1].metric("Participantes", len(members))
     metrics[2].metric("Actualizado", order_data["updated_at"])
 
@@ -399,15 +410,18 @@ def render_menu_form(order_data: dict, current_user_id: int | None) -> None:
 
     selected_category = st.selectbox("Categoría", options=categories, key="menu_category")
     items = menu_by_category[selected_category]
-    item_labels = {
-        f"{row['name']} - {format_currency(row['price'])}": row["id"] for row in items
-    }
-    item_options = list(item_labels.keys())
+    item_names = {int(row["id"]): row["name"] for row in items}
+    item_options = [int(row["id"]) for row in items]
 
     if st.session_state.get("menu_item") not in item_options:
         st.session_state["menu_item"] = item_options[0]
 
-    selected_item_label = st.selectbox("Plato", options=item_options, key="menu_item")
+    selected_item_id = st.selectbox(
+        "Plato",
+        options=item_options,
+        format_func=lambda item_id: item_names.get(int(item_id), ""),
+        key="menu_item",
+    )
     quantity = st.number_input("Cantidad", min_value=1, step=1, value=1, key="menu_quantity")
     notes = st.text_area("Notas", placeholder="Sin cebolla, bien cocido, etc.", key="menu_notes")
     submitted = st.button("Agregar al pedido", use_container_width=True)
@@ -417,7 +431,7 @@ def render_menu_form(order_data: dict, current_user_id: int | None) -> None:
             add_order_item(
                 order_id=order_data["id"],
                 user_id=current_user_id,
-                menu_item_id=item_labels[selected_item_label],
+                menu_item_id=int(selected_item_id),
                 quantity=int(quantity),
                 notes=notes,
             )
@@ -438,24 +452,53 @@ def render_members(members: list) -> None:
         st.write(f"- {member['name']}")
 
 
-def render_order_items(order_id: int, current_user_id: int | None, order_status: str) -> None:
+def can_delete_order_item(
+    current_user_id: int | None,
+    item_user_id: int,
+    order_status: str,
+    admin_authenticated: bool,
+) -> bool:
+    return admin_authenticated or (
+        current_user_id == item_user_id and order_status != "closed"
+    )
+
+
+def delete_order_item_for_role(order_item_id: int, admin_authenticated: bool) -> None:
+    if admin_authenticated:
+        remove_order_item_as_admin(order_item_id)
+        return
+    remove_order_item(order_item_id)
+
+
+def render_order_items(
+    order_id: int,
+    current_user_id: int | None,
+    order_status: str,
+    admin_authenticated: bool,
+) -> None:
     st.subheader("Detalle del pedido")
     items = get_order_items(order_id)
     if not items:
         st.caption("Todavía no se cargaron productos.")
         return
 
-    if order_status == "closed":
+    if order_status == "closed" and not admin_authenticated:
         st.info("El pedido está cerrado. Ya no se pueden eliminar productos.")
+    elif order_status == "closed" and admin_authenticated:
+        st.info("Pedido cerrado: como admin podés eliminar ítems igualmente.")
 
     for row in items:
-        subtotal = format_currency(row["subtotal"])
         notes_suffix = f" | Nota: {row['notes']}" if row["notes"] else ""
-        title = f"{row['user_name']} pidió {row['quantity']} x {row['item_name']} ({subtotal})"
+        title = f"{row['user_name']} pidió {row['quantity']} x {row['item_name']}"
 
         columns = st.columns([7, 2])
         columns[0].write(f"{title}{notes_suffix}")
-        can_delete = current_user_id == row["user_id"] and order_status != "closed"
+        can_delete = can_delete_order_item(
+            current_user_id=current_user_id,
+            item_user_id=int(row["user_id"]),
+            order_status=order_status,
+            admin_authenticated=admin_authenticated,
+        )
         if columns[1].button(
             "Eliminar",
             key=f"delete-item-{row['id']}",
@@ -463,7 +506,10 @@ def render_order_items(order_id: int, current_user_id: int | None, order_status:
             use_container_width=True,
         ):
             try:
-                remove_order_item(row["id"])
+                delete_order_item_for_role(
+                    order_item_id=int(row["id"]),
+                    admin_authenticated=admin_authenticated,
+                )
             except ValueError as error:
                 st.error(str(error))
             else:
@@ -471,16 +517,14 @@ def render_order_items(order_id: int, current_user_id: int | None, order_status:
 
 
 def render_totals(order_id: int) -> None:
-    st.subheader("Totales por persona")
-    totals = get_order_totals_by_user(order_id)
+    st.subheader("Totalizado por producto")
+    totals = get_order_totals_by_product(order_id)
     if not totals:
         st.caption("Sin totales por mostrar.")
         return
 
     for row in totals:
-        st.write(
-            f"- {row['user_name']}: {row['total_items']} ítems | {format_currency(row['total_amount'])}"
-        )
+        st.write(f"- {row['item_name']}: {row['total_quantity']} unidades")
 
 
 def main() -> None:
@@ -513,7 +557,7 @@ def main() -> None:
 
     if current_order_id is None:
         if not admin_authenticated:
-            st.info("Creá un pedido nuevo o ingresá la palabra clave de uno existente desde la barra lateral.")
+            render_order_entry_screen(current_user_id)
         return
 
     order_data = as_dict(get_order(current_order_id))
@@ -529,7 +573,12 @@ def main() -> None:
     left_column, right_column = st.columns([1.2, 1])
     with left_column:
         render_menu_form(order_data, current_user_id)
-        render_order_items(current_order_id, current_user_id, order_data["status"])
+        render_order_items(
+            current_order_id,
+            current_user_id,
+            order_data["status"],
+            admin_authenticated,
+        )
     with right_column:
         render_members(members)
         render_totals(current_order_id)

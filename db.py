@@ -13,6 +13,7 @@ MENU_CSV_PATH = BASE_DIR / "carta.csv"
 ALLOWED_ORDER_STATUSES = {"open", "confirmed", "closed"}
 INSERT_ORDER_MEMBER_SQL = "INSERT OR IGNORE INTO order_members (order_id, user_id) VALUES (?, ?)"
 ORDER_NOT_FOUND_MESSAGE = "El pedido ya no existe."
+UPDATE_ORDER_TIMESTAMP_SQL = "UPDATE orders SET updated_at = CURRENT_TIMESTAMP WHERE id = ?"
 
 
 def get_connection() -> sqlite3.Connection:
@@ -93,24 +94,49 @@ def init_db() -> None:
 
 
 def seed_menu(connection: sqlite3.Connection, csv_path: Path) -> None:
-    existing_count = connection.execute("SELECT COUNT(*) FROM menu_items").fetchone()[0]
-    if existing_count > 0:
-        return
-
     if not csv_path.exists():
         raise FileNotFoundError(f"No se encontro el archivo de carta: {csv_path}")
 
     with csv_path.open("r", encoding="utf-8-sig", newline="") as csv_file:
-        reader = csv.DictReader(csv_file)
+        reader = csv.DictReader(csv_file, delimiter=";")
         rows = []
         for row in reader:
-            price = parse_price(row["Precio"])
-            rows.append((row["Categoria"].strip(), row["Plato"].strip(), price))
+            raw_id = str(row.get("Id", "")).strip()
+            if not raw_id:
+                continue
+            item_id = int(raw_id)
+            category = str(row.get("Categoria", "")).strip()
+            item_name = str(row.get("Plato", "")).strip()
+            if not category or not item_name:
+                continue
+            rows.append((item_id, category, item_name, 0))
 
-    connection.executemany(
-        "INSERT OR IGNORE INTO menu_items (category, name, price) VALUES (?, ?, ?)",
-        rows,
-    )
+    csv_item_ids = {row[0] for row in rows}
+
+    for item_id, category, item_name, price in rows:
+        connection.execute(
+            "INSERT OR IGNORE INTO menu_items (id, category, name, price) VALUES (?, ?, ?, ?)",
+            (item_id, category, item_name, price),
+        )
+        try:
+            connection.execute(
+                "UPDATE menu_items SET category = ?, name = ?, price = ? WHERE id = ?",
+                (category, item_name, price, item_id),
+            )
+        except sqlite3.IntegrityError:
+            # Mantiene el registro actual cuando el CSV trae duplicados que chocan con UNIQUE(category, name).
+            continue
+
+    if csv_item_ids:
+        placeholders = ",".join(["?"] * len(csv_item_ids))
+        connection.execute(
+            f"""
+            DELETE FROM menu_items
+            WHERE id NOT IN ({placeholders})
+              AND id NOT IN (SELECT DISTINCT menu_item_id FROM order_items)
+            """,
+            tuple(csv_item_ids),
+        )
 
 
 def parse_price(value: str) -> int:
@@ -244,14 +270,13 @@ def get_orders() -> list[sqlite3.Row]:
                 o.created_at,
                 o.updated_at,
                 creator.name AS created_by_name,
-                COALESCE(order_totals.total_amount, 0) AS total_amount,
+                COALESCE(order_totals.total_items, 0) AS total_items,
                 COALESCE(member_totals.member_count, 0) AS member_count
             FROM orders o
             JOIN users creator ON creator.id = o.created_by
             LEFT JOIN (
-                SELECT oi.order_id, SUM(mi.price * oi.quantity) AS total_amount
+                SELECT oi.order_id, SUM(oi.quantity) AS total_items
                 FROM order_items oi
-                JOIN menu_items mi ON mi.id = oi.menu_item_id
                 GROUP BY oi.order_id
             ) AS order_totals ON order_totals.order_id = o.id
             LEFT JOIN (
@@ -278,11 +303,10 @@ def get_order(order_id: int) -> sqlite3.Row | None:
                 o.created_at,
                 o.updated_at,
                 creator.name AS created_by_name,
-                COALESCE(SUM(mi.price * oi.quantity), 0) AS total_amount
+                COALESCE(SUM(oi.quantity), 0) AS total_items
             FROM orders o
             JOIN users creator ON creator.id = o.created_by
             LEFT JOIN order_items oi ON oi.order_id = o.id
-            LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
             WHERE o.id = ?
             GROUP BY o.id, o.order_code, o.title, o.access_key, o.status, o.created_by, o.created_at, o.updated_at, creator.name
             """,
@@ -400,7 +424,7 @@ def add_order_item(order_id: int, user_id: int, menu_item_id: int, quantity: int
             """,
             (order_id, user_id, menu_item_id, quantity, notes.strip() if notes else None),
         )
-        connection.execute("UPDATE orders SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", (order_id,))
+        connection.execute(UPDATE_ORDER_TIMESTAMP_SQL, (order_id,))
 
 
 def remove_order_item(order_item_id: int) -> None:
@@ -414,7 +438,20 @@ def remove_order_item(order_item_id: int) -> None:
 
         ensure_order_allows_changes(connection, row["order_id"])
         connection.execute("DELETE FROM order_items WHERE id = ?", (order_item_id,))
-        connection.execute("UPDATE orders SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", (row["order_id"],))
+        connection.execute(UPDATE_ORDER_TIMESTAMP_SQL, (row["order_id"],))
+
+
+def remove_order_item_as_admin(order_item_id: int) -> None:
+    with get_connection() as connection:
+        row = connection.execute(
+            "SELECT order_id FROM order_items WHERE id = ?",
+            (order_item_id,),
+        ).fetchone()
+        if row is None:
+            return
+
+        connection.execute("DELETE FROM order_items WHERE id = ?", (order_item_id,))
+        connection.execute(UPDATE_ORDER_TIMESTAMP_SQL, (row["order_id"],))
 
 
 def get_order_items(order_id: int) -> list[sqlite3.Row]:
@@ -432,8 +469,7 @@ def get_order_items(order_id: int) -> list[sqlite3.Row]:
                 u.name AS user_name,
                 mi.category,
                 mi.name AS item_name,
-                mi.price,
-                mi.price * oi.quantity AS subtotal
+                mi.id AS product_id
             FROM order_items oi
             JOIN users u ON u.id = oi.user_id
             JOIN menu_items mi ON mi.id = oi.menu_item_id
@@ -451,15 +487,33 @@ def get_order_totals_by_user(order_id: int) -> list[sqlite3.Row]:
             SELECT
                 u.id AS user_id,
                 u.name AS user_name,
-                COALESCE(SUM(mi.price * oi.quantity), 0) AS total_amount,
                 COALESCE(SUM(oi.quantity), 0) AS total_items
             FROM order_members om
             JOIN users u ON u.id = om.user_id
             LEFT JOIN order_items oi ON oi.order_id = om.order_id AND oi.user_id = om.user_id
-            LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
             WHERE om.order_id = ?
             GROUP BY u.id, u.name
             ORDER BY u.name COLLATE NOCASE
+            """,
+            (order_id,),
+        ).fetchall()
+
+
+def get_order_totals_by_product(order_id: int) -> list[sqlite3.Row]:
+    with get_connection() as connection:
+        return connection.execute(
+            """
+            SELECT
+                mi.id AS product_id,
+                mi.category,
+                mi.name AS item_name,
+                COALESCE(SUM(oi.quantity), 0) AS total_quantity,
+                COUNT(oi.id) AS total_orders
+            FROM order_items oi
+            JOIN menu_items mi ON mi.id = oi.menu_item_id
+            WHERE oi.order_id = ?
+            GROUP BY mi.id, mi.category, mi.name
+            ORDER BY total_quantity DESC, mi.name COLLATE NOCASE
             """,
             (order_id,),
         ).fetchall()
