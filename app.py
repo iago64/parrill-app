@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import importlib
 import os
 import sqlite3
+from urllib.parse import quote
 
 import streamlit as st
+import streamlit.components.v1 as components
 from streamlit.errors import StreamlitSecretNotFoundError
 
 import db as db_module
@@ -39,6 +43,10 @@ st.set_page_config(page_title="Parrill App", page_icon="🍽️", layout="wide")
 
 APP_TITLE = "Parrill App"
 ADMIN_PASSWORD_ENV_VAR = "PARRILL_APP_ADMIN_PASSWORD"
+COOKIE_TTL_SECONDS = 60 * 60 * 24 * 30
+COOKIE_USER_NAME_KEY = "parrill_app_user_name"
+COOKIE_ORDER_ID_KEY = "parrill_app_order_id"
+COOKIE_ADMIN_KEY = "parrill_app_admin"
 
 
 ORDER_STATUS_LABELS = {
@@ -46,6 +54,97 @@ ORDER_STATUS_LABELS = {
     "confirmed": "Confirmado",
     "closed": "Cerrado",
 }
+
+
+def get_cookie_value(cookie_key: str) -> str:
+    return str(st.context.cookies.get(cookie_key, "") or "").strip()
+
+
+def set_cookie(cookie_key: str, value: str, max_age_seconds: int = COOKIE_TTL_SECONDS) -> None:
+    encoded_value = quote(value, safe="")
+    components.html(
+        f"""
+        <script>
+            document.cookie = "{cookie_key}={encoded_value}; path=/; max-age={max_age_seconds}; SameSite=Lax";
+        </script>
+        """,
+        height=0,
+    )
+
+
+def clear_cookie(cookie_key: str) -> None:
+    components.html(
+        f"""
+        <script>
+            document.cookie = "{cookie_key}=; path=/; max-age=0; SameSite=Lax";
+        </script>
+        """,
+        height=0,
+    )
+
+
+def build_admin_cookie_token(admin_password: str) -> str:
+    return hmac.new(
+        key=admin_password.encode("utf-8"),
+        msg=b"parrill-app-admin",
+        digestmod=hashlib.sha256,
+    ).hexdigest()
+
+
+def restore_session_from_cookies() -> None:
+    current_user_id = st.session_state.get("selected_user_id")
+    if current_user_id is None:
+        cookie_name = get_cookie_value(COOKIE_USER_NAME_KEY)
+        if cookie_name:
+            try:
+                st.session_state["selected_user_id"] = get_or_create_user(cookie_name)
+            except ValueError:
+                clear_cookie(COOKIE_USER_NAME_KEY)
+
+    current_order_id = st.session_state.get("selected_order_id")
+    if current_order_id is None:
+        cookie_order_id = get_cookie_value(COOKIE_ORDER_ID_KEY)
+        if cookie_order_id.isdigit() and get_order(int(cookie_order_id)) is not None:
+            st.session_state["selected_order_id"] = int(cookie_order_id)
+        elif cookie_order_id:
+            clear_cookie(COOKIE_ORDER_ID_KEY)
+
+    if st.session_state.get("admin_authenticated"):
+        return
+
+    admin_password = get_admin_password()
+    if not admin_password:
+        clear_cookie(COOKIE_ADMIN_KEY)
+        return
+
+    cookie_admin_token = get_cookie_value(COOKIE_ADMIN_KEY)
+    expected_token = build_admin_cookie_token(admin_password)
+    if cookie_admin_token and hmac.compare_digest(cookie_admin_token, expected_token):
+        st.session_state["admin_authenticated"] = True
+
+
+def sync_session_cookies() -> None:
+    current_user_id = st.session_state.get("selected_user_id")
+    if current_user_id is None:
+        clear_cookie(COOKIE_USER_NAME_KEY)
+    else:
+        user = get_user(int(current_user_id))
+        if user is None:
+            clear_cookie(COOKIE_USER_NAME_KEY)
+        else:
+            set_cookie(COOKIE_USER_NAME_KEY, str(user["name"]))
+
+    current_order_id = st.session_state.get("selected_order_id")
+    if current_order_id is None:
+        clear_cookie(COOKIE_ORDER_ID_KEY)
+    else:
+        set_cookie(COOKIE_ORDER_ID_KEY, str(int(current_order_id)))
+
+    admin_password = get_admin_password()
+    if not st.session_state.get("admin_authenticated") or not admin_password:
+        clear_cookie(COOKIE_ADMIN_KEY)
+    else:
+        set_cookie(COOKIE_ADMIN_KEY, build_admin_cookie_token(admin_password))
 
 
 def ensure_session_state() -> None:
@@ -58,12 +157,14 @@ def clear_selected_order() -> None:
     st.session_state["selected_order_id"] = None
     for key in ("menu_category", "menu_item", "menu_quantity", "menu_notes"):
         st.session_state.pop(key, None)
+    sync_session_cookies()
 
 
 def logout_user() -> None:
     clear_selected_order()
     st.session_state["selected_user_id"] = None
     st.session_state["admin_authenticated"] = False
+    sync_session_cookies()
 
 
 def get_admin_password() -> str:
@@ -83,6 +184,7 @@ def render_admin_access_panel() -> bool:
     with st.sidebar.expander("Administración", expanded=False):
         if not admin_password:
             st.session_state["admin_authenticated"] = False
+            sync_session_cookies()
             st.caption(
                 "Configurá `admin_password` en Streamlit secrets o la variable de entorno "
                 f"`{ADMIN_PASSWORD_ENV_VAR}` para habilitar esta vista."
@@ -93,6 +195,7 @@ def render_admin_access_panel() -> bool:
             st.success("Panel administrativo habilitado.")
             if st.button("Cerrar panel admin", use_container_width=True):
                 st.session_state["admin_authenticated"] = False
+                sync_session_cookies()
                 st.rerun()
             return True
 
@@ -103,6 +206,7 @@ def render_admin_access_panel() -> bool:
         if submitted:
             if entered_password == admin_password:
                 st.session_state["admin_authenticated"] = True
+                sync_session_cookies()
                 st.rerun()
 
             st.error("La contraseña administrativa es incorrecta.")
@@ -218,6 +322,7 @@ def render_login_screen() -> None:
         user_id = get_or_create_user(name)
         st.session_state["selected_user_id"] = user_id
         clear_selected_order()
+        sync_session_cookies()
         st.rerun()
 
 
@@ -264,6 +369,7 @@ def handle_create_order_form(current_user_id: int) -> None:
         return
 
     st.session_state["selected_order_id"] = order_id
+    sync_session_cookies()
     st.success("Pedido creado. Compartí la palabra clave para que otros puedan ingresar.")
     st.rerun()
 
@@ -292,6 +398,7 @@ def handle_access_order_form(current_user_id: int) -> None:
 
     join_order(order["id"], current_user_id)
     st.session_state["selected_order_id"] = int(order["id"])
+    sync_session_cookies()
     st.success(f"Ingresaste a {order['title']}.")
     st.rerun()
 
@@ -530,6 +637,8 @@ def render_totals(order_id: int) -> None:
 def main() -> None:
     init_db()
     ensure_session_state()
+    restore_session_from_cookies()
+    sync_session_cookies()
 
     current_user_id = st.session_state.get("selected_user_id")
     if current_user_id is None:
