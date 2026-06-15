@@ -1,14 +1,14 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
 import importlib
 import os
 import sqlite3
-from urllib.parse import quote, unquote
 
+import extra_streamlit_components as stx
 import streamlit as st
-import streamlit.components.v1 as components
 from streamlit.errors import StreamlitSecretNotFoundError
 
 import db as db_module
@@ -57,39 +57,19 @@ ORDER_STATUS_LABELS = {
 
 
 def get_cookie_value(cookie_key: str) -> str:
-    raw_value = str(st.context.cookies.get(cookie_key, "") or "").strip()
-    if not raw_value:
-        return ""
-    return unquote(raw_value)
+    cookie_manager = stx.CookieManager(key="parrill-cookie-manager")
+    return str(cookie_manager.get(cookie_key) or "").strip()
 
 
 def set_cookie(cookie_key: str, value: str, max_age_seconds: int = COOKIE_TTL_SECONDS) -> None:
-    encoded_value = quote(value, safe="")
-    components.html(
-        f"""
-        <script>
-            document.cookie = "{cookie_key}={encoded_value}; path=/; max-age={max_age_seconds}; SameSite=Lax";
-            try {{
-                window.parent.document.cookie = "{cookie_key}={encoded_value}; path=/; max-age={max_age_seconds}; SameSite=Lax";
-            }} catch (error) {{}}
-        </script>
-        """,
-        height=0,
-    )
+    cookie_manager = stx.CookieManager(key="parrill-cookie-manager")
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=max_age_seconds)
+    cookie_manager.set(cookie_key, value, expires_at=expires_at)
 
 
 def clear_cookie(cookie_key: str) -> None:
-    components.html(
-        f"""
-        <script>
-            document.cookie = "{cookie_key}=; path=/; max-age=0; SameSite=Lax";
-            try {{
-                window.parent.document.cookie = "{cookie_key}=; path=/; max-age=0; SameSite=Lax";
-            }} catch (error) {{}}
-        </script>
-        """,
-        height=0,
-    )
+    cookie_manager = stx.CookieManager(key="parrill-cookie-manager")
+    cookie_manager.delete(cookie_key)
 
 
 def build_admin_cookie_token(admin_password: str) -> str:
