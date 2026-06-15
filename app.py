@@ -5,7 +5,7 @@ import hmac
 import importlib
 import os
 import sqlite3
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -57,7 +57,10 @@ ORDER_STATUS_LABELS = {
 
 
 def get_cookie_value(cookie_key: str) -> str:
-    return str(st.context.cookies.get(cookie_key, "") or "").strip()
+    raw_value = str(st.context.cookies.get(cookie_key, "") or "").strip()
+    if not raw_value:
+        return ""
+    return unquote(raw_value)
 
 
 def set_cookie(cookie_key: str, value: str, max_age_seconds: int = COOKIE_TTL_SECONDS) -> None:
@@ -66,6 +69,9 @@ def set_cookie(cookie_key: str, value: str, max_age_seconds: int = COOKIE_TTL_SE
         f"""
         <script>
             document.cookie = "{cookie_key}={encoded_value}; path=/; max-age={max_age_seconds}; SameSite=Lax";
+            try {{
+                window.parent.document.cookie = "{cookie_key}={encoded_value}; path=/; max-age={max_age_seconds}; SameSite=Lax";
+            }} catch (error) {{}}
         </script>
         """,
         height=0,
@@ -77,6 +83,9 @@ def clear_cookie(cookie_key: str) -> None:
         f"""
         <script>
             document.cookie = "{cookie_key}=; path=/; max-age=0; SameSite=Lax";
+            try {{
+                window.parent.document.cookie = "{cookie_key}=; path=/; max-age=0; SameSite=Lax";
+            }} catch (error) {{}}
         </script>
         """,
         height=0,
@@ -638,7 +647,6 @@ def main() -> None:
     init_db()
     ensure_session_state()
     restore_session_from_cookies()
-    sync_session_cookies()
 
     current_user_id = st.session_state.get("selected_user_id")
     if current_user_id is None:
