@@ -3,97 +3,105 @@ Id;Categoria;Plato
 2;Parrilla;Asado con papas fritas
 3;Parrilla;Vacio
 4;Parrilla;Vacio con papas fritas
-5;Parrilla;Entraña / Lomo
-6;Parrilla;Entraña / Lomo con papas fritas
-7;Parrilla;Bondiola
-8;Parrilla;Bondiola con papas fritas
-9;Parrilla;Chorizo / Morcilla
-10;Parrilla;Provoleta
-11;Parrilla;Bife de Chorizo
-12;Parrilla;Bife de Chorizo con papas fritas
-13;Minutas;Milanesa
-14;Minutas;Milanesa con papas fritas / pure
-15;Minutas;Milanesa napolitana
-16;Minutas;Milanesa napolitana con papas fritas / pure
-17;Minutas;Milanesa de pollo
-18;Minutas;Milanesa de pollo con papas fritas / pure
-19;Minutas;Milanesa de pollo napolitana con papas fritas / pure
-20;Minutas;Churrasco de Pollo
-21;Minutas;Churrasco de Pollo con papas fritas / pure
-22;Minutas;Huevo Frito
-23;Minutas;Papas fritas / Pure de papa
-24;Minutas;Porcion de tortilla
-25;Minutas;Tortilla chica
-26;Minutas;Tortilla grande (5 Personas)
-27;Sandwiches;Choripan
-28;Sandwiches;Bondiola
-29;Sandwiches;Bondiola con 2 ingredientes
-30;Sandwiches;Bondiola completa
-31;Sandwiches;Vacio
-32;Sandwiches;Vacio con 2 ingredientes
-33;Sandwiches;Vacio completo
-34;Sandwiches;Lomo
-35;Sandwiches;Lomo
-36;Sandwiches;Lomo
-37;Sandwiches;Milanesa
-38;Sandwiches;Milanesa con 2 ingredientes
-39;Sandwiches;Milanesa
-40;Sandwiches;Hamburguesa
-41;Sandwiches;Hamburguesa con 2 ingredientes
-42;Sandwiches;Hamburguesa completa
-43;Achuras;Chinchulin
-44;Achuras;Riñon
-45;Ensaladas;Ensalada Chica
-46;Ensaladas;Ensalada Mediana
-47;Ensaladas;Ensalada Grande
-48;Empanadas;Jamon y Queso
-49;Pastas;Tallarines
-50;Pastas;Tallarines con estofado
-51;Pastas;Ravioles
-52;Pastas;Ravioles con estofado
-53;Pastas;Sorrentinos
-54;Pastas;Sorrentinos con estofado
-55;Pastas;ñoquis
-56;Pastas;ñoquis con estofado
-57;Vinos;Vaso de vino
-58;Vinos;Trumpeter Malbec
-59;Vinos;Cordero con piel de lobo Malbec
-60;Postres;Popsy
-61;Postres;Nesquick
-62;Postres;Torpedo
-63;Postres;Luxor
-64;Postres;Tacita Sin Parar / Oreo
-65;Postres;Queso y Dulce
-66;Empanadas;Pollo
-67;Empanadas;Carne
-68;Empanadas;Carne cortada a cuchillo / fritas
-69;Bebidas;Coca Cola
-70;Bebidas;Coca Cola Zero
-71;Bebidas;Fanta
-72;Bebidas;Fanta Zero
-73;Bebidas;Sprite
-74;Bebidas;Sprite Zero
-75;Bebidas;Levite / Aquarius
-76;Bebidas;Powerade
-77;Bebidas;Agua
-78;Bebidas;Soda
-79;Cervezas / Fernet;Brahma 1ltrs
-80;Cervezas / Fernet;Stella Artois 1ltrs
-81;Cervezas / Fernet;Corona 710cc
-82;Cervezas / Fernet;LATA Heineken 473cc
-83;Cervezas / Fernet;Medida fernet
-84;Cervezas / Fernet;Fernet con coca
-85;Cafeteria;Cafe
-86;Cafeteria;Te
-87;Cafeteria;Medialuna
-88;Cafeteria;Medialuna con jamon y queso
-89;Promos;Promo 1
-90;Promos;Promo 2
-91;Promos;Promo 3
-92;Promos;Promo 4
-93;Promos;Promo 5
-94;Promos;Promo 6
-95;Promos;Promo 7
-96;Promos;Promo 8
-97;Promos;Promo 9
-98;Promos;Promo 10
+5;Parrilla;Lomo
+6;Parrilla;Entraña
+7;Parrilla;Lomo con papas fritas
+8;Parrilla;Entraña con papas fritas
+9;Parrilla;Bondiola
+10;Parrilla;Bondiola con papas fritas
+11;Parrilla;Chorizo / Morcilla
+12;Parrilla;Provoleta
+13;Parrilla;Bife de Chorizo
+14;Parrilla;Bife de Chorizo con papas fritas
+15;Minutas;Milanesa
+16;Minutas;Milanesa con papas fritas
+17;Minutas;Milanesa con pure
+18;Minutas;Milanesa napolitana
+19;Minutas;Milanesa napolitana con papas fritas
+20;Minutas;Milanesa napolitana con pure
+21;Minutas;Milanesa de pollo
+22;Minutas;Milanesa de pollo con papas fritas
+23;Minutas;Milanesa de pollo con pure
+24;Minutas;Milanesa de pollo napolitana con papas fritas
+25;Minutas;Milanesa de pollo napolitana con pure
+26;Minutas;Churrasco de Pollo
+27;Minutas;Churrasco de Pollo con papas fritas
+28;Minutas;Churrasco de Pollo con pure
+29;Minutas;Huevo Frito
+30;Minutas;Papas fritas
+31;Minutas;Pure de papa
+32;Minutas;Porcion de tortilla
+33;Minutas;Tortilla chica
+34;Minutas;Tortilla grande (5 Personas)
+35;Sandwiches;Choripan
+36;Sandwiches;Bondiola
+37;Sandwiches;Bondiola con 2 ingredientes
+38;Sandwiches;Bondiola completa
+39;Sandwiches;Vacio
+40;Sandwiches;Vacio con 2 ingredientes
+41;Sandwiches;Vacio completo
+42;Sandwiches;Lomo
+43;Sandwiches;Lomo
+44;Sandwiches;Lomo
+45;Sandwiches;Milanesa
+46;Sandwiches;Milanesa con 2 ingredientes
+47;Sandwiches;Milanesa
+48;Sandwiches;Hamburguesa
+49;Sandwiches;Hamburguesa con 2 ingredientes
+50;Sandwiches;Hamburguesa completa
+51;Achuras;Chinchulin
+52;Achuras;Riñon
+53;Ensaladas;Ensalada Chica
+54;Ensaladas;Ensalada Mediana
+55;Ensaladas;Ensalada Grande
+56;Empanadas;Jamon y Queso
+57;Pastas;Tallarines
+58;Pastas;Tallarines con estofado
+59;Pastas;Ravioles
+60;Pastas;Ravioles con estofado
+61;Pastas;Sorrentinos
+62;Pastas;Sorrentinos con estofado
+63;Pastas;ñoquis
+64;Pastas;ñoquis con estofado
+65;Vinos;Vaso de vino
+66;Vinos;Trumpeter Malbec
+67;Vinos;Cordero con piel de lobo Malbec
+68;Postres;Popsy
+69;Postres;Nesquick
+70;Postres;Torpedo
+71;Postres;Luxor
+72;Postres;Tacita Sin Parar / Oreo
+73;Postres;Queso y Dulce
+74;Empanadas;Pollo
+75;Empanadas;Carne
+76;Empanadas;Carne cortada a cuchillo / fritas
+77;Bebidas;Coca Cola
+78;Bebidas;Coca Cola Zero
+79;Bebidas;Fanta
+80;Bebidas;Fanta Zero
+81;Bebidas;Sprite
+82;Bebidas;Sprite Zero
+83;Bebidas;Levite / Aquarius
+84;Bebidas;Powerade
+85;Bebidas;Agua
+86;Bebidas;Soda
+87;Cervezas / Fernet;Brahma 1ltrs
+88;Cervezas / Fernet;Stella Artois 1ltrs
+89;Cervezas / Fernet;Corona 710cc
+90;Cervezas / Fernet;LATA Heineken 473cc
+91;Cervezas / Fernet;Medida fernet
+92;Cervezas / Fernet;Fernet con coca
+93;Cafeteria;Cafe
+94;Cafeteria;Te
+95;Cafeteria;Medialuna
+96;Cafeteria;Medialuna con jamon y queso
+97;Promos;Promo 1
+98;Promos;Promo 2
+99;Promos;Promo 3
+100;Promos;Promo 4
+101;Promos;Promo 5
+102;Promos;Promo 6
+103;Promos;Promo 7
+104;Promos;Promo 8
+105;Promos;Promo 9
+106;Promos;Promo 10
