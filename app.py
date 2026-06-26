@@ -104,6 +104,11 @@ def clear_cookie(cookie_key: str) -> None:
     COOKIE_STORE.clear(cookie_key)
 
 
+def clear_session_cookies() -> None:
+    for cookie_key in (COOKIE_USER_NAME_KEY, COOKIE_ORDER_ID_KEY, COOKIE_ADMIN_KEY):
+        clear_cookie(cookie_key)
+
+
 def set_cookie_if_changed(
     cookie_key: str,
     value: str,
@@ -192,18 +197,19 @@ def ensure_session_state() -> None:
     st.session_state.setdefault("admin_authenticated", False)
 
 
-def clear_selected_order() -> None:
+def clear_selected_order(sync_cookies: bool = True) -> None:
     st.session_state["selected_order_id"] = None
     for key in ("menu_category", "menu_item", "menu_quantity", "menu_notes"):
         st.session_state.pop(key, None)
-    sync_session_cookies()
+    if sync_cookies:
+        sync_session_cookies()
 
 
 def logout_user() -> None:
-    clear_selected_order()
+    clear_selected_order(sync_cookies=False)
     st.session_state["selected_user_id"] = None
     st.session_state["admin_authenticated"] = False
-    sync_session_cookies()
+    clear_session_cookies()
 
 
 def get_admin_password() -> str:
@@ -367,7 +373,7 @@ def render_login_screen() -> None:
 def render_session_panel(user_name: str) -> None:
     st.sidebar.header("Sesión")
     st.sidebar.success(f"Usuario: {user_name}")
-    if st.sidebar.button("Cerrar sesión", use_container_width=True):
+    if st.sidebar.button("Cerrar sesión (limpiar cookies)", use_container_width=True):
         logout_user()
         st.rerun()
 
