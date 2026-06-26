@@ -55,21 +55,71 @@ ORDER_STATUS_LABELS = {
     "closed": "Cerrado",
 }
 
+COOKIE_MANAGER = stx.CookieManager(key="parrill-cookie-manager")
+
+
+class SessionCookieStore:
+    def __init__(self, cookie_manager: stx.CookieManager, max_age_seconds: int) -> None:
+        self.cookie_manager = cookie_manager
+        self.max_age_seconds = max_age_seconds
+
+    def _component_key(self, operation: str, cookie_key: str) -> str:
+        return f"cookie-{operation}-{cookie_key}"
+
+    def get(self, cookie_key: str) -> str:
+        return str(self.cookie_manager.get(cookie_key) or "").strip()
+
+    def _get_cached(self, cookie_key: str) -> str:
+        return str(self.cookie_manager.cookies.get(cookie_key) or "").strip()
+
+    def set_if_changed(self, cookie_key: str, value: str) -> None:
+        if self._get_cached(cookie_key) == value:
+            return
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=self.max_age_seconds)
+        self.cookie_manager.set(
+            cookie_key,
+            value,
+            expires_at=expires_at,
+            key=self._component_key("set", cookie_key),
+        )
+
+    def clear(self, cookie_key: str) -> None:
+        if cookie_key in self.cookie_manager.cookies:
+            self.cookie_manager.delete(
+                cookie_key,
+                key=self._component_key("delete", cookie_key),
+            )
+
+COOKIE_STORE = SessionCookieStore(
+    cookie_manager=COOKIE_MANAGER,
+    max_age_seconds=COOKIE_TTL_SECONDS,
+)
+
 
 def get_cookie_value(cookie_key: str) -> str:
-    cookie_manager = stx.CookieManager(key="parrill-cookie-manager")
-    return str(cookie_manager.get(cookie_key) or "").strip()
-
-
-def set_cookie(cookie_key: str, value: str, max_age_seconds: int = COOKIE_TTL_SECONDS) -> None:
-    cookie_manager = stx.CookieManager(key="parrill-cookie-manager")
-    expires_at = datetime.now(timezone.utc) + timedelta(seconds=max_age_seconds)
-    cookie_manager.set(cookie_key, value, expires_at=expires_at)
+    return COOKIE_STORE.get(cookie_key)
 
 
 def clear_cookie(cookie_key: str) -> None:
-    cookie_manager = stx.CookieManager(key="parrill-cookie-manager")
-    cookie_manager.delete(cookie_key)
+    COOKIE_STORE.clear(cookie_key)
+
+
+def set_cookie_if_changed(
+    cookie_key: str,
+    value: str,
+    max_age_seconds: int = COOKIE_TTL_SECONDS,
+) -> None:
+    if max_age_seconds != COOKIE_TTL_SECONDS:
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=max_age_seconds)
+        COOKIE_MANAGER.set(
+            cookie_key,
+            value,
+            expires_at=expires_at,
+            key=f"cookie-set-{cookie_key}",
+        )
+        return
+
+    COOKIE_STORE.set_if_changed(cookie_key, value)
 
 
 def build_admin_cookie_token(admin_password: str) -> str:
@@ -121,19 +171,19 @@ def sync_session_cookies() -> None:
         if user is None:
             clear_cookie(COOKIE_USER_NAME_KEY)
         else:
-            set_cookie(COOKIE_USER_NAME_KEY, str(user["name"]))
+            set_cookie_if_changed(COOKIE_USER_NAME_KEY, str(user["name"]))
 
     current_order_id = st.session_state.get("selected_order_id")
     if current_order_id is None:
         clear_cookie(COOKIE_ORDER_ID_KEY)
     else:
-        set_cookie(COOKIE_ORDER_ID_KEY, str(int(current_order_id)))
+        set_cookie_if_changed(COOKIE_ORDER_ID_KEY, str(int(current_order_id)))
 
     admin_password = get_admin_password()
     if not st.session_state.get("admin_authenticated") or not admin_password:
         clear_cookie(COOKIE_ADMIN_KEY)
     else:
-        set_cookie(COOKIE_ADMIN_KEY, build_admin_cookie_token(admin_password))
+        set_cookie_if_changed(COOKIE_ADMIN_KEY, build_admin_cookie_token(admin_password))
 
 
 def ensure_session_state() -> None:
@@ -311,7 +361,6 @@ def render_login_screen() -> None:
         user_id = get_or_create_user(name)
         st.session_state["selected_user_id"] = user_id
         clear_selected_order()
-        sync_session_cookies()
         st.rerun()
 
 
@@ -495,6 +544,9 @@ def render_menu_form(order_data: dict, current_user_id: int | None) -> None:
         st.session_state["menu_quantity"] = 1
         st.session_state["menu_notes"] = ""
 
+    st.session_state.setdefault("menu_quantity", 1)
+    st.session_state.setdefault("menu_notes", "")
+
     menu_by_category = get_menu_by_category()
     categories = list(menu_by_category.keys())
     if not categories:
@@ -518,7 +570,7 @@ def render_menu_form(order_data: dict, current_user_id: int | None) -> None:
         format_func=lambda item_id: item_names.get(int(item_id), ""),
         key="menu_item",
     )
-    quantity = st.number_input("Cantidad", min_value=1, step=1, value=1, key="menu_quantity")
+    quantity = st.number_input("Cantidad", min_value=1, step=1, key="menu_quantity")
     notes = st.text_area("Notas", placeholder="Sin cebolla, bien cocido, etc.", key="menu_notes")
     submitted = st.button("Agregar al pedido", use_container_width=True)
 
